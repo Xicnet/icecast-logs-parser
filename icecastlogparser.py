@@ -29,7 +29,7 @@ from pyparsing import alphas,nums, dblQuotedString, Combine, Word, Group, delimi
 import string
 import glob
 import sys
-import MySQLdb
+from psycopg2.extras import execute_values
 import pygeoip
 import time
 import re
@@ -45,23 +45,23 @@ server_name = gethostname().lower()
 
 # glob supports Unix style pathname extensions
 # Here need to put the Access log file name you need parse
-python_files = glob.glob("/var/log/icecast/old/access.log.20150326_180409")
+python_files = glob.glob("/var/log/icecast2/access.log")
 
 # Put the correct path to your .DAT GeoIP DB
 gi  = pygeoip.GeoIP('/usr/share/GeoIP/GeoIP.dat')
 gic = pygeoip.GeoIP('/usr/share/GeoIP/GeoLiteCity.dat')
 
 # DB Params
-db_host = "190.228.29.57"
-db_user = "fm8990stats"
-db_passwd = "fm8990st4ts"
-db_name  = "fm8990stats"
+db_host = "localhost"
+db_user = "icelog"
+db_passwd = "icelog"
+db_name  = "icelog"
 
 # Filters (Skip this lines if match, using regex)
 filter_ip = r'54.146.35|10.10'
 
 # Number of inserts per query
-HIST_PER_QUERY = 100
+HIST_PER_QUERY = 10
 
 
 #################################################
@@ -69,10 +69,63 @@ HIST_PER_QUERY = 100
 #################################################
 
 try:
-     conn = MySQLdb.connect (host = db_host, user = db_user, passwd = db_passwd, db = db_name)
-except MySQLdb.Error, e:
-     print "Error %d: %s" % (e.args[0], e.args[1])
-     sys.exit (1)
+    import MySQLdb
+    try:
+        print "Trying MySQL..."
+        conn = MySQLdb.connect (host = db_host, user = db_user, passwd = db_passwd, db = db_name)
+        db_type = "mysql"
+    except MySQLdb.Error, e:
+        print "Error using MySQL %d: %s" % (e.args[0], e.args[1])
+except:
+    import psycopg2
+    try:
+        print "Trying Postgres..."
+        conn = psycopg2.connect("dbname=icelog user=icelog password=icelog host=localhost")
+        cursor = conn.cursor()
+        db_type = "pg"
+    except Exception, e:
+        print "Error using Postgres: ", str(e)
+        sys.exit (1)
+
+def insert_to_mysql(values_to_insert):
+    global conn, db_type
+    cursor = conn.cursor()
+    try:
+        # Execute the SQL command
+        query = "INSERT INTO icecast_logs (datetime_start, datetime_end, ip, country_code, mount, status_code, duration, sent_bytes, agent, referer, server, auth_user, auth_pass) VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+        cursor.executemany(query, values_to_insert)
+        # Commit your changes in the database
+        conn.commit()
+    except MySQLdb.Error, e:
+        # Rollback in case there is any error
+        print "An error has been passed. %s" % e
+        conn.rollback()
+        cursor.close()
+        hits_counter = 0
+        query = ""
+
+def insert_to_pg(values_to_insert):
+    global conn, db_type
+    cursor = conn.cursor()
+    try:
+        query = "INSERT INTO icecast_logs (datetime_start, datetime_end, ip, country_code, mount, status_code, duration, sent_bytes, agent, referer, server, auth_user, auth_pass) VALUES %s"
+        execute_values (
+            cursor, query, values_to_insert, template=None, page_size=100
+        )
+        # Commit your changes in the database
+        conn.commit()
+    except Exception, e:
+        # Rollback in case there is any error
+        print "An error has been passed: %s" % str(e)
+        conn.rollback()
+        cursor.close()
+        hits_counter = 0
+        query = ""
+
+if db_type == "mysql":
+    insert_to_db = insert_to_mysql
+else:
+    insert_to_db = insert_to_pg
 
 def getCmdFields( s, l, t ):
     t["method"],t["requestURI"],t["protocolVersion"] = t[0].strip('"').split()
@@ -89,6 +142,7 @@ def getLogLineBNF():
         month = Word(string.uppercase, string.lowercase, exact=3)
         serverDateTime = Group( Suppress("[") + Combine( integer + "/" + month + "/" + integer + ":" + integer + ":" + integer + ":" + integer ) + timeZoneOffset + Suppress("]") )
 
+        # 10.0.1.1 - - [14/Feb/2018:16:58:00 +0000] "GET /live.mp3 HTTP/1.0" 200 17059093 "-" "MPlayer 1.2.1 (Debian), built with gcc-5.3.1" 1063
         logLineBNF = ( ipAddress.setResultsName("ipAddr") +
                        Suppress("-") +
                        ("-" | Word( alphas+nums+"@._" )).setResultsName("auth") +
@@ -96,7 +150,7 @@ def getLogLineBNF():
                        dblQuotedString.setResultsName("cmd").setParseAction(getCmdFields) +
                        (integer | "-").setResultsName("statusCode") +
                        (integer | "-").setResultsName("numBytesSent")  +
-                       dblQuotedString.setResultsName("referer").setParseAction(removeQuotes) +
+                       (dblQuotedString | "-").setResultsName("referer").setParseAction(removeQuotes) +
                        dblQuotedString.setResultsName("userAgent").setParseAction(removeQuotes) +
 		       (integer | "-").setResultsName("numDurationTime"))
     return logLineBNF
@@ -120,22 +174,9 @@ for file_name in sorted(python_files):
 	
 	        if hits_counter == HIST_PER_QUERY:
 	            # prepare a cursor object using cursor() method
-	            cursor = conn.cursor()
-	            try:
-	                # Execute the SQL command
-			query = "INSERT INTO icecast_logs (datetime_start, datetime_end, ip, country_code, mount, status_code, duration, sent_bytes, agent, referer, server, user, pass) VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
-	                cursor.executemany(query, values_to_insert)
-	                # Commit your changes in the database
-	                conn.commit()
-	            except MySQLdb.Error, e:
-	                # Rollback in case there is any error
-	                print "An error has been passed. %s" % e
-	                conn.rollback()
-	            cursor.close()
-	            hits_counter = 0
-	            query = ""
+                    insert_to_db(values_to_insert)
 	        else:
-	            #query = query + "INSERT INTO icecast_logs (datetime_start, datetime_end, ip, country_code, mount, status_code, duration, sent_bytes, agent, referer, server, user, pass) \
+	            #query = query + "INSERT INTO icecast_logs (datetime_start, datetime_end, ip, country_code, mount, status_code, duration, sent_bytes, agent, referer, server, auth_user, auth_pass) \
 		#			VALUES('{0}', '{1}', '{2}', '{3}', '{4}', {5}, {6}, {7}, '{8}', '{9}', '{10}', '{11}', '{12}');".format(datetime_start, datetime_end, fields.ipAddr, countryCode, streamName[0], fields.statusCode, fields.numDurationTime, fields.numBytesSent, fields.userAgent, fields.referer, server_name, fields.userName, fields.password)
 		    values_to_insert.append((datetime_start, datetime_end, fields.ipAddr, countryCode, streamName[0], fields.statusCode, fields.numDurationTime, fields.numBytesSent, fields.userAgent, fields.referer, server_name, fields.userName, fields.password))
 	            hits_counter+=1
