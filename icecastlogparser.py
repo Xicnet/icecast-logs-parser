@@ -45,7 +45,7 @@ server_name = gethostname().lower()
 
 # glob supports Unix style pathname extensions
 # Here need to put the Access log file name you need parse
-python_files = glob.glob("/var/log/icecast2/access.log")
+python_files = glob.glob("/home/rama/icecast2/access.*")
 
 # Put the correct path to your .DAT GeoIP DB
 gi  = pygeoip.GeoIP('/usr/share/GeoIP/GeoIP.dat')
@@ -61,7 +61,7 @@ db_name  = "icelog"
 filter_ip = r'54.146.35|10.10'
 
 # Number of inserts per query
-HIST_PER_QUERY = 10
+HIST_PER_QUERY = 100
 
 
 #################################################
@@ -108,7 +108,7 @@ def insert_to_pg(values_to_insert):
     global conn, db_type
     cursor = conn.cursor()
     try:
-        query = "INSERT INTO icecast_logs (datetime_start, datetime_end, ip, country_code, mount, status_code, duration, sent_bytes, agent, referer, server, auth_user, auth_pass) VALUES %s"
+        query = "INSERT INTO icecast_stats_icecastlog (datetime_start, datetime_end, ip, country_code, mount, status_code, duration, sent_bytes, agent, referer, server, auth_user, auth_pass) VALUES %s"
         execute_values (
             cursor, query, values_to_insert, template=None, page_size=100
         )
