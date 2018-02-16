@@ -17,3 +17,11 @@ sudo pip install -r requirements.txt
 Centos 7 installation
 
 yum install python-devel python-pip mariadb-devel GeoIP
+
+
+Logrotate
+=========
+
+Replace your /etc/logrotate.d/icecast2 with the config we ship:
+
+cp logrotate-icecast2.conf /etc/logrotate.d/icecast2

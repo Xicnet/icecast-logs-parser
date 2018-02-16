@@ -45,7 +45,7 @@ server_name = gethostname().lower()
 
 # glob supports Unix style pathname extensions
 # Here need to put the Access log file name you need parse
-python_files = glob.glob("/home/rama/icecast2/access.*")
+python_files = glob.glob("/home/rama/icecast2/access.log")
 
 # Put the correct path to your .DAT GeoIP DB
 gi  = pygeoip.GeoIP('/usr/share/GeoIP/GeoIP.dat')
