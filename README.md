@@ -25,3 +25,10 @@ Logrotate
 Replace your /etc/logrotate.d/icecast2 with the config we ship:
 
 cp logrotate-icecast2.conf /etc/logrotate.d/icecast2
+
+GeoIP.dat
+=========
+
+wget -O - http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz | /bin/gunzip -c > /usr/share/GeoIP/GeoLiteCity.dat
+wget -O - http://geolite.maxmind.com/download/geoip/database/GeoLiteCountry/GeoIP.dat.gz | /bin/gunzip -c > /usr/share/GeoIP/GeoIP.dat
+
