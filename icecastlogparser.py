@@ -52,10 +52,15 @@ gi  = pygeoip.GeoIP('/usr/share/GeoIP/GeoIP.dat')
 gic = pygeoip.GeoIP('/usr/share/GeoIP/GeoLiteCity.dat')
 
 # DB Params
-db_host = "localhost"
-db_user = "icelog"
+db_host   = "localhost"
+db_user   = "icelog"
 db_passwd = "icelog"
-db_name  = "icelog"
+db_name   = "icelog"
+
+try:
+    from local_config import *
+except ImportError, e:
+    pass
 
 # Filters (Skip this lines if match, using regex)
 filter_ip = r'54.146.35|10.10'
@@ -80,7 +85,7 @@ except:
     import psycopg2
     try:
         print "Trying Postgres..."
-        conn = psycopg2.connect("dbname=icelog user=icelog password=icelog host=localhost")
+        conn = psycopg2.connect("dbname=%s user=%s password=%s host=%s" % (db_name, db_user, db_passwd, db_host))
         cursor = conn.cursor()
         db_type = "pg"
     except Exception, e:
